@@ -1,6 +1,7 @@
 /*
  * Project: Video
  * Copyright (C) 2002-2007  Minnesota Department of Transportation
+ * Copyright (C) 2014-2015  AHMCT, University of California
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,8 +43,11 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * The VideoServlet is the base class for all servlets in the video package. 
  * @author Timothy Johnson
- *
+ * @author Travis Swanston
  */
+
+// FIXME: lower some of the log levels from warning to info!
+
 public abstract class VideoServlet extends HttpServlet {
 	
 	protected ImageSize maxImageSize = ImageSize.MEDIUM;
@@ -84,11 +88,15 @@ public abstract class VideoServlet extends HttpServlet {
 
 	protected int maxFrameRate = 3;
 
+	/** The (shared) GroupManager */
+	protected static GroupManager groupManager = null;
+
 	/** Initialize the VideoServlet */
 	public void init(ServletConfig config) throws ServletException {
 		super.init( config );
 		ServletContext ctx = config.getServletContext();
 		Properties props =(Properties)ctx.getAttribute("properties");
+		groupManager = (GroupManager)ctx.getAttribute("groupmanager");
 		proxy = new Boolean(props.getProperty("proxy", "false")).booleanValue();
 		if(proxy){
 			createDistrictURLs(props);
@@ -258,13 +266,34 @@ public abstract class VideoServlet extends HttpServlet {
 		HttpServletResponse response)
 	{
 		Client c = new Client();
+		int serial = -1;
+		String cid = "";
 		try {
 			if(isDirectoryRequest(request)){
 				sendDistrictList(response);
 				return;
 			}
 			configureClient(c, request);
-			processRequest(response, c);
+			if (!proxy && isPublished(c.getCameraName())) {
+				// "gatekeeper" function
+				// TODO in future: make optional via property
+				logger.warning(groupManager.getUsageString());
+				cid = c.getCameraName();
+				serial = groupManager.requestResource(cid);
+				logger.warning("REQUEST FOR " + cid + ": " + serial);
+				logger.warning(groupManager.getUsageString());
+				if (serial >= 0) {
+					processRequest(response, c);
+				}
+				else {
+					// deny (403)
+					response.setStatus(HttpServletResponse.
+						SC_FORBIDDEN);
+				}
+			}
+			else {
+				processRequest(response, c);
+			}
 		}
 		catch(Throwable th) {
 			logger.warning(c.getCameraName() + ": " + th.getMessage());
@@ -281,6 +310,14 @@ public abstract class VideoServlet extends HttpServlet {
 				response.getOutputStream().close();
 			}
 			catch(Exception e2) {
+			}
+			if (serial >= 0) {
+				boolean relResult = groupManager.releaseResource(serial);
+				if (relResult == true)
+					logger.warning("RELEASE FOR " + cid +
+						": " + relResult);
+					logger.warning(groupManager.
+						getUsageString());
 			}
 		}
 	}

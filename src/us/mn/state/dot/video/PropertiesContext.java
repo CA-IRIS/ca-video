@@ -31,6 +31,7 @@ import javax.servlet.http.HttpServlet;
 
 /**
  * Sets up the properties context for all servlets.
+ * Also contains the GroupManager.
  * @author Timothy Johnson
  * @author Travis Swanston
  */
@@ -61,6 +62,9 @@ public class PropertiesContext extends HttpServlet{
 	/** Properties */
 	static protected final Properties props = new Properties();
 
+	/** The GroupManager */
+	protected static GroupManager groupManager;
+
 	/** Constructor for the VideoServer */
 	public void init( ServletConfig config ) throws ServletException {
 		super.init( config );
@@ -76,6 +80,8 @@ public class PropertiesContext extends HttpServlet{
 		// for TOMCAT applications.  This will do nothing here!
 		java.security.Security.setProperty(PROP_DNS_TTL, dnsTTL);
 		ctx.setAttribute("properties", props);
+		groupManager = GroupManager.getGroupManager(props);
+		ctx.setAttribute("groupmanager", groupManager);
 	}
 
 	/**

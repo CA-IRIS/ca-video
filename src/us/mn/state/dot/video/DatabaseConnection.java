@@ -1,6 +1,7 @@
 /*
  * Video project
  * Copyright (C) 2011  Minnesota Department of Transportation
+ * Copyright (C) 2014-2015  AHMCT, University of California
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +24,10 @@ import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Properties;
 import java.util.logging.Logger;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -33,7 +36,7 @@ import java.util.logging.Logger;
  * well as re-establishing the connection if it is lost.
  * 
  * @author Timothy Johnson
- *
+ * @author Travis Swanston
  */
 public class DatabaseConnection {
 
@@ -44,6 +47,11 @@ public class DatabaseConnection {
 	protected static final String CAMERA_ENCODER_TYPE = "encoder_type";
 
 	protected static final String TABLE_CAMERA = "camera_view";
+
+	// SwitchServer
+	protected static final String DID = "did";
+	protected static final String CID = "cid";
+	protected static final String TABLE_DECODER_MAP = "video.decoder_map";
 
 	protected static final String ASCENDING = "asc";
 	
@@ -71,6 +79,11 @@ public class DatabaseConnection {
 	protected PreparedStatement encoderTypeStatement = null;
 
 	protected PreparedStatement encoderChannelStatement = null;
+
+	// SwitchServer
+	protected PreparedStatement getDecoderMapStatement = null;
+	protected PreparedStatement mapDecoderStatement = null;
+	protected PreparedStatement unmapDecoderStatement = null;
 
 	private static DatabaseConnection db = null;
 	
@@ -121,6 +134,13 @@ public class DatabaseConnection {
 			encoderChannelStatement = connection.prepareStatement(
 					"select " + CAMERA_ENCODER_CHANNEL + " from " + TABLE_CAMERA +
 					" where " + CAMERA_ID + " = ?");
+			// SwitchServer
+			getDecoderMapStatement = connection.prepareStatement(
+				"SELECT " + DID + ", " + CID + " FROM " + TABLE_DECODER_MAP);
+			mapDecoderStatement = connection.prepareStatement(
+				"INSERT INTO " + TABLE_DECODER_MAP + " (" + DID + ", " + CID + ") VALUES (?, ?)");
+			unmapDecoderStatement = connection.prepareStatement(
+				"DELETE FROM " + TABLE_DECODER_MAP + " WHERE " + DID + " = ?");
 			logger.info( "Opened connection to " + dbName + " database." );
 		} catch ( Exception e ) {
 			System.err.println("Error connecting to DB: " + url + " USER: " + user + " PWD: " + password );
@@ -179,4 +199,53 @@ public class DatabaseConnection {
 		}
 		return -1;
 	}
+
+	// SwitchServer
+	public synchronized ConcurrentHashMap<String, String> getDecoderMap() {
+		ConcurrentHashMap<String, String> dmap = new ConcurrentHashMap<String, String>();
+		try {
+			ResultSet rs = getDecoderMapStatement.executeQuery();
+			if (rs == null)
+				return null;
+			String did = null;
+			String cid = null;
+			while (rs.next()) {
+				did = rs.getString(DID);
+				cid = rs.getString(CID);
+				if ((did != null) && (cid != null))
+					dmap.put(did, cid);
+			}
+		}
+		catch(SQLException e) {
+			logger.warning("SQLException: " + e.getStackTrace().toString());
+			e.printStackTrace();
+			return null;
+		}
+		return dmap;
+	}
+
+	// SwitchServer
+	public synchronized void mapDecoder(String did, String cid) {
+		// technically, should UPSERT or use transaction here
+		if (did == null)
+			return;
+		try {
+			unmapDecoderStatement.setString(1, did);
+			unmapDecoderStatement.executeUpdate();
+		}
+		catch(SQLException e) {
+			e.printStackTrace();
+		}
+		if ((cid == null) || (cid.trim().equals("")))
+			return;
+		try {
+			mapDecoderStatement.setString(1, did);
+			mapDecoderStatement.setString(2, cid);
+			mapDecoderStatement.executeUpdate();
+		}
+		catch(SQLException e) {
+			e.printStackTrace();
+		}
+	}
+
 }

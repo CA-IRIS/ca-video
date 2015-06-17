@@ -13,7 +13,7 @@
 	<servlet>
 		<servlet-name>StreamServer</servlet-name>
 		<servlet-class>us.mn.state.dot.video.StreamServer</servlet-class>
-		<load-on-startup>2</load-on-startup>
+		<load-on-startup>3</load-on-startup>
 	</servlet>
 	<servlet-mapping>
 		<servlet-name>StreamServer</servlet-name>
@@ -28,4 +28,15 @@
 		<servlet-name>ImageServer</servlet-name>
 		<url-pattern>/image/*</url-pattern>
 	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>SwitchServer</servlet-name>
+		<servlet-class>us.mn.state.dot.video.SwitchServer</servlet-class>
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>SwitchServer</servlet-name>
+		<url-pattern>/switch</url-pattern>
+	</servlet-mapping>
+
 </web-app>
